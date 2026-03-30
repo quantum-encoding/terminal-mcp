@@ -9,11 +9,11 @@
  * Setup in ~/.claude/mcp.json:
  *   { "servers": { "terminal": {
  *       "command": "npx",
- *       "args": ["@anthropic-community/terminal-mcp"]
+ *       "args": ["@quantum-encoding-europe-limited/terminal-mcp"]
  *   }}}
  *
  * Or run directly:
- *   npx @anthropic-community/terminal-mcp
+ *   npx @quantum-encoding-europe-limited/terminal-mcp
  *
  * Requires: tmux installed and available in PATH.
  */
@@ -21,13 +21,18 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 
 // ── Config ──
 
 const TMUX_SESSION = process.env.TERMINAL_MCP_SESSION || "mcp-terminals";
 const MAX_OUTPUT_LINES = parseInt(process.env.TERMINAL_MCP_MAX_LINES || "200", 10);
 const SHELL = process.env.SHELL || "/bin/bash";
+
+/** Escape a string for safe use in shell commands. */
+function shellEscape(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
 
 // ── tmux helpers ──
 
@@ -179,9 +184,9 @@ server.tool(
     }
 
     // Create a new pane
-    const cdFlag = cwd ? `-c "${cwd}"` : "";
+    const cdFlag = cwd ? `-c ${shellEscape(cwd)}` : "";
     const useShell = shellOverride || SHELL;
-    tmux(`split-window -t ${TMUX_SESSION} ${cdFlag} "${useShell}"`);
+    tmux(`split-window -t ${TMUX_SESSION} ${cdFlag} ${shellEscape(useShell)}`);
 
     // Get the new pane's index (last one created)
     const panes = listPanes();
@@ -196,7 +201,7 @@ server.tool(
 
       // Send initial command if provided
       if (command) {
-        tmux(`send-keys -t ${TMUX_SESSION}:0.${newPane.index} "${command.replace(/"/g, '\\"')}" Enter`);
+        tmux(`send-keys -t ${TMUX_SESSION}:0.${newPane.index} -- ${shellEscape(command)} Enter`);
       }
     }
 
@@ -221,8 +226,7 @@ server.tool(
       return { content: [{ type: "text", text: `Terminal '${name}' not found. Available: ${available || "none"}` }] };
     }
 
-    const escaped = input.replace(/"/g, '\\"').replace(/\$/g, "\\$");
-    tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} "${escaped}" ${enter !== false ? "Enter" : ""}`);
+    tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} -- ${shellEscape(input)} ${enter !== false ? "Enter" : ""}`);
 
     // Brief pause to let output appear, then capture
     await new Promise((r) => setTimeout(r, 300));

@@ -1,0 +1,137 @@
+What is terminal-mcp?
+=====================
+
+terminal-mcp is an MCP server that gives AI assistants (like Claude Code) the
+ability to open, manage, and interact with multiple terminal sessions at the
+same time. Think of it as a remote control for your terminals that an AI can
+operate.
+
+
+What is an MCP server?
+----------------------
+
+MCP stands for Model Context Protocol. It's a standard way for AI assistants
+to use external tools. An MCP server is a small program that exposes a set of
+"tools" -- each tool is a specific action the AI can take. The AI discovers
+what tools are available, understands what each one does, and calls them when
+needed.
+
+Without MCP servers, an AI assistant can only read files and run one command at
+a time, waiting for it to finish before doing anything else. MCP servers extend
+what the AI can do.
+
+
+What problem does terminal-mcp solve?
+--------------------------------------
+
+Normally, when an AI assistant runs a shell command, it blocks -- it sends the
+command, waits for it to complete, and reads the output. That works fine for
+quick commands like `ls` or `git status`, but it falls apart when you need:
+
+  - A dev server running in the background (`npm run dev`)
+  - A build process you want to check on later
+  - Multiple long-running processes at once (frontend + backend + database)
+  - Interactive prompts that need input over time
+  - The ability to send Ctrl+C to stop a stuck process
+
+terminal-mcp solves all of these by managing named terminal sessions through
+tmux, a widely-used terminal multiplexer.
+
+
+How does it work?
+-----------------
+
+Under the hood, terminal-mcp creates a tmux session and manages panes within
+it. Each pane is a named terminal that runs independently. The server exposes
+these tools:
+
+  terminal_list      -- See all active terminals (name, PID, working directory,
+                        what command is running)
+
+  terminal_spawn     -- Create a new named terminal. Optionally set its working
+                        directory and run a command immediately.
+                        Example: spawn "backend" in ./api running "go run ."
+
+  terminal_send      -- Type text into a terminal. Like sitting at the keyboard
+                        and typing a command. Returns recent output so the AI
+                        can see what happened.
+
+  terminal_read      -- Read the current visible output from a terminal.
+                        ANSI escape codes (colors, cursor movement) are stripped
+                        so the AI gets clean text.
+
+  terminal_close     -- Shut down a terminal session. Tries graceful shutdown
+                        first (Ctrl+C, Ctrl+D), falls back to force-kill.
+
+  terminal_send_signal -- Send control signals: Ctrl+C (interrupt), Ctrl+D
+                        (EOF), Ctrl+Z (suspend), Ctrl+L (clear), Ctrl+\
+                        (quit). Essential for managing running processes.
+
+  terminal_resize    -- Change terminal dimensions. Useful before reading
+                        output from programs that are sensitive to terminal
+                        width (like formatted tables).
+
+  terminal_snapshot  -- Get a quick overview of ALL terminals at once: what
+                        each one is running and its last few lines of output.
+
+  terminal_wait      -- Wait for specific text to appear in a terminal's
+                        output. Polls every second up to a timeout. Perfect
+                        for "wait until the server prints 'Ready'" scenarios.
+
+
+A real-world example
+--------------------
+
+Say you ask Claude Code to "start the frontend and backend, then run the test
+suite once both are ready." Without terminal-mcp, this is awkward -- the AI
+can only run one blocking command at a time.
+
+With terminal-mcp, the AI can:
+
+  1. terminal_spawn "backend" with command "go run ./cmd/server"
+  2. terminal_spawn "frontend" with command "npm run dev"
+  3. terminal_wait "backend" for "listening on :8080"
+  4. terminal_wait "frontend" for "ready in"
+  5. terminal_spawn "tests" with command "npm test"
+  6. terminal_read "tests" to check results
+  7. terminal_snapshot to see everything at a glance
+
+Each terminal runs independently. The AI can check on any of them, send
+commands, interrupt processes, and read output -- just like you would with
+multiple terminal tabs open.
+
+
+Setup
+-----
+
+Requires tmux installed (`brew install tmux` on macOS, `apt install tmux` on
+Linux).
+
+Add to your Claude Code MCP config (~/.claude/mcp.json):
+
+  {
+    "servers": {
+      "terminal": {
+        "command": "npx",
+        "args": ["@quantum-encoding-europe-limited/terminal-mcp"]
+      }
+    }
+  }
+
+Or run it directly:
+
+  npx @quantum-encoding-europe-limited/terminal-mcp
+
+
+Why it matters
+--------------
+
+terminal-mcp turns an AI assistant from a "run one command, wait, run another"
+tool into something that can genuinely manage concurrent workflows. It can
+start services, monitor logs, run tests, and react to output -- all in
+parallel. This is the difference between an AI that can edit files and one that
+can actually operate a development environment.
+
+It's a small server (~400 lines of TypeScript), but it removes one of the
+biggest friction points in AI-assisted development: the inability to manage
+long-running and concurrent terminal processes.
