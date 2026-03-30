@@ -1,0 +1,40 @@
+{
+  "name": "@anthropic-community/terminal-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for managing multiplexed terminal sessions — spawn, send, read, and orchestrate tmux panes from Claude Code or any MCP client",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "terminal-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "claude-code",
+    "terminal",
+    "tmux",
+    "multiplexer",
+    "orchestration"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quantum-encoding/terminal-mcp"
+  }
+}
