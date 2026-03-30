@@ -25,7 +25,18 @@ import { execSync } from "node:child_process";
 
 // ── Config ──
 
-const TMUX_SESSION = process.env.TERMINAL_MCP_SESSION || "mcp-terminals";
+/** Detect the current tmux session, or fall back to env/default. */
+function detectTmuxSession(): string {
+  if (process.env.TERMINAL_MCP_SESSION) return process.env.TERMINAL_MCP_SESSION;
+  // If we're inside tmux, use the current session
+  if (process.env.TMUX) {
+    try {
+      return execSync("tmux display-message -p '#S'", { stdio: "pipe", encoding: "utf-8" }).trim();
+    } catch { /* fall through */ }
+  }
+  return "mcp-terminals";
+}
+const TMUX_SESSION = detectTmuxSession();
 const MAX_OUTPUT_LINES = parseInt(process.env.TERMINAL_MCP_MAX_LINES || "200", 10);
 const SHELL = process.env.SHELL || "/bin/bash";
 
