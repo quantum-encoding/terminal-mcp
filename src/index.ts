@@ -237,7 +237,20 @@ server.tool(
       return { content: [{ type: "text", text: `Terminal '${name}' not found. Available: ${available || "none"}` }] };
     }
 
-    tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} -- ${shellEscape(input)} ${enter !== false ? "Enter" : ""}`);
+    // For short input, use send-keys directly. For longer input, use
+    // load-buffer + paste-buffer to avoid escaping issues and freezes.
+    if (input.length <= 80 && !input.includes("'") && !input.includes("\n")) {
+      tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} -- ${shellEscape(input)} ${enter !== false ? "Enter" : ""}`);
+    } else {
+      const tmp = `/tmp/tmux-mcp-${Date.now()}.txt`;
+      require("node:fs").writeFileSync(tmp, input);
+      tmux(`load-buffer ${tmp}`);
+      tmux(`paste-buffer -t ${TMUX_SESSION}:0.${pane.index}`);
+      require("node:fs").unlinkSync(tmp);
+      if (enter !== false) {
+        tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} Enter`);
+      }
+    }
 
     // Brief pause to let output appear, then capture
     await new Promise((r) => setTimeout(r, 300));
