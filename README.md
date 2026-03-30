@@ -19,7 +19,7 @@ Add to your Claude Code MCP config (`~/.claude/mcp.json` or `.mcp.json`):
   "mcpServers": {
     "terminal": {
       "command": "npx",
-      "args": ["@anthropic-community/terminal-mcp"]
+      "args": ["@quantum-encoding-europe-limited/terminal-mcp"]
     }
   }
 }
@@ -28,7 +28,7 @@ Add to your Claude Code MCP config (`~/.claude/mcp.json` or `.mcp.json`):
 Or run directly:
 
 ```bash
-npx @anthropic-community/terminal-mcp
+npx @quantum-encoding-europe-limited/terminal-mcp
 ```
 
 ## Tools

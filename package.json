@@ -1,5 +1,5 @@
 {
-  "name": "@anthropic-community/terminal-mcp",
+  "name": "@quantum-encoding-europe-limited/terminal-mcp",
   "version": "0.1.0",
   "description": "MCP server for managing multiplexed terminal sessions — spawn, send, read, and orchestrate tmux panes from Claude Code or any MCP client",
   "type": "module",
