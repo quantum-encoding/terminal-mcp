@@ -22,6 +22,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { execSync } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
 
 // ── Config ──
 
@@ -270,10 +271,10 @@ server.tool(
       tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} -- ${shellEscape(input)} ${enter !== false ? "Enter" : ""}`);
     } else {
       const tmp = `/tmp/tmux-mcp-${Date.now()}.txt`;
-      require("node:fs").writeFileSync(tmp, input);
+      writeFileSync(tmp, input);
       tmux(`load-buffer ${tmp}`);
       tmux(`paste-buffer -t ${TMUX_SESSION}:0.${pane.index}`);
-      require("node:fs").unlinkSync(tmp);
+      unlinkSync(tmp);
       if (enter !== false) {
         tmux(`send-keys -t ${TMUX_SESSION}:0.${pane.index} Enter`);
       }
