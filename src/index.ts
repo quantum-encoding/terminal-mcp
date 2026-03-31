@@ -434,13 +434,21 @@ server.tool(
 
 server.tool(
   "terminal_wait",
-  "Wait for a terminal to show specific output (e.g. 'Server ready' or '$ '). Polls every second up to the timeout. Useful for waiting for builds, servers to start, etc.",
+  `Wait for a terminal to show specific output. Polls every second up to the timeout.
+
+Also watches for permission prompts ("Do you want to proceed") and returns immediately
+with a "permission_needed" status so the conductor can approve without wasting the timeout.
+
+Returns JSON-like status: "found" (pattern matched), "permission_needed" (prompt detected),
+or "timeout" (neither matched in time).`,
   {
     name: z.string().describe("Terminal name to watch"),
     pattern: z.string().describe("Text pattern to wait for (substring match, case-insensitive)"),
     timeout: z.number().optional().describe("Max seconds to wait (default: 30, max: 120)"),
+    interrupt_on: z.array(z.string()).optional()
+      .describe("Additional patterns that trigger early return (default: permission prompts). Case-insensitive."),
   },
-  async ({ name, pattern, timeout }) => {
+  async ({ name, pattern, timeout, interrupt_on }) => {
     const pane = findPane(name);
     if (!pane) {
       return { content: [{ type: "text", text: `Terminal '${name}' not found` }] };
@@ -449,20 +457,40 @@ server.tool(
     const maxWait = Math.min(timeout || 30, 120);
     const lowerPattern = pattern.toLowerCase();
 
+    // Default interrupt patterns: Claude permission prompts
+    const interruptPatterns = (interrupt_on || [
+      "do you want to proceed",
+      "run shell command",
+      "allow this action",
+    ]).map((p) => p.toLowerCase());
+
     for (let i = 0; i < maxWait; i++) {
       const output = capturePane(pane.index, 30).toLowerCase();
+
+      // Check main pattern
       if (output.includes(lowerPattern)) {
         const fullOutput = capturePane(pane.index, 20);
         return {
-          content: [{ type: "text", text: `Pattern "${pattern}" found in '${name}' after ${i}s:\n\n${fullOutput}` }],
+          content: [{ type: "text", text: `[found] Pattern "${pattern}" found in '${name}' after ${i}s:\n\n${fullOutput}` }],
         };
       }
+
+      // Check interrupt patterns (permission prompts etc)
+      for (const ip of interruptPatterns) {
+        if (output.includes(ip)) {
+          const fullOutput = capturePane(pane.index, 30);
+          return {
+            content: [{ type: "text", text: `[permission_needed] '${name}' hit a prompt after ${i}s (matched: "${ip}"):\n\n${fullOutput}` }],
+          };
+        }
+      }
+
       await new Promise((r) => setTimeout(r, 1000));
     }
 
     const finalOutput = capturePane(pane.index, 20);
     return {
-      content: [{ type: "text", text: `Timeout (${maxWait}s) waiting for "${pattern}" in '${name}'. Last output:\n\n${finalOutput}` }],
+      content: [{ type: "text", text: `[timeout] Waited ${maxWait}s for "${pattern}" in '${name}'. Last output:\n\n${finalOutput}` }],
     };
   }
 );
