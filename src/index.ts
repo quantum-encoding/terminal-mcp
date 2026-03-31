@@ -178,8 +178,8 @@ server.tool(
 
 Use 'mode' to control how Claude sessions run:
 - "interactive" (default): Normal foreground session with permission prompts.
-- "background": Runs with --dangerously-skip-permissions. No prompts — faster for pre-configured projects.
-- "resume": Resume an existing Claude session by name (uses --resume flag).`,
+- "background": Auto-allows safe tools (Bash, Edit, Read, Write, Glob, Grep, Agent) but blocks destructive git commands (force push, reset --hard, branch -D, clean -f) and rm -rf. Best when you want autonomous work with guardrails.
+- "resume": Resume an existing Claude session by name with the same background safety guardrails.`,
   {
     name: z.string().describe("Name for this terminal (e.g. 'backend', 'tests', 'server')"),
     cwd: z.string().optional().describe("Working directory to start in"),
@@ -202,11 +202,19 @@ Use 'mode' to control how Claude sessions run:
     }
 
     // Build launch command based on mode
+    // Background mode uses --allowedTools for safe operations and
+    // --disallowedTools to block destructive git commands.
+    // NEVER use --dangerously-skip-permissions — it bypasses all safety.
+    const backgroundFlags = [
+      '--allowedTools "Bash(*) Edit Read Write Glob Grep Agent"',
+      '--disallowedTools "Bash(git push --force*) Bash(git reset --hard*) Bash(git checkout -- *) Bash(git clean -f*) Bash(git branch -D*) Bash(rm -rf*) Bash(rm -r *)"',
+    ].join(" ");
+
     let launchCmd = command || "";
     if (!command && mode === "background") {
-      launchCmd = "claude --dangerously-skip-permissions";
+      launchCmd = `claude ${backgroundFlags}`;
     } else if (!command && mode === "resume") {
-      launchCmd = `claude --resume "${name}" --dangerously-skip-permissions`;
+      launchCmd = `claude --resume "${name}" ${backgroundFlags}`;
     }
 
     // Create a new pane
@@ -231,8 +239,8 @@ Use 'mode' to control how Claude sessions run:
       }
     }
 
-    const modeLabel = mode === "background" ? " (background, no permissions)"
-      : mode === "resume" ? ` (resuming session '${name}')`
+    const modeLabel = mode === "background" ? " (background, safe tools only, destructive ops blocked)"
+      : mode === "resume" ? ` (resuming session '${name}', safe tools only)`
       : "";
 
     return {
