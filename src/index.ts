@@ -174,14 +174,21 @@ server.tool(
 
 server.tool(
   "terminal_spawn",
-  "Spawn a new named terminal session. Optionally start it in a specific directory and/or run a command immediately.",
+  `Spawn a new named terminal session. Optionally start it in a specific directory and/or run a command immediately.
+
+Use 'mode' to control how Claude sessions run:
+- "interactive" (default): Normal foreground session with permission prompts.
+- "background": Runs with --dangerously-skip-permissions. No prompts — faster for pre-configured projects.
+- "resume": Resume an existing Claude session by name (uses --resume flag).`,
   {
     name: z.string().describe("Name for this terminal (e.g. 'backend', 'tests', 'server')"),
     cwd: z.string().optional().describe("Working directory to start in"),
     command: z.string().optional().describe("Command to run immediately after spawning (e.g. 'npm run dev')"),
     shell: z.string().optional().describe("Shell to use (default: $SHELL)"),
+    mode: z.enum(["interactive", "background", "resume"]).optional()
+      .describe("Session mode: 'interactive' (default), 'background' (skip permissions), 'resume' (resume existing session)"),
   },
-  async ({ name, cwd, command, shell: shellOverride }) => {
+  async ({ name, cwd, command, shell: shellOverride, mode }) => {
     if (!tmuxExists()) {
       return { content: [{ type: "text", text: "Error: tmux is not installed" }] };
     }
@@ -192,6 +199,14 @@ server.tool(
     const existing = findPane(name);
     if (existing) {
       return { content: [{ type: "text", text: `Terminal '${name}' already exists (pane ${existing.index}). Use terminal_send to interact with it.` }] };
+    }
+
+    // Build launch command based on mode
+    let launchCmd = command || "";
+    if (!command && mode === "background") {
+      launchCmd = "claude --dangerously-skip-permissions";
+    } else if (!command && mode === "resume") {
+      launchCmd = `claude --resume "${name}" --dangerously-skip-permissions`;
     }
 
     // Create a new pane
@@ -210,14 +225,18 @@ server.tool(
       // Re-tile for clean layout
       try { tmux(`select-layout -t ${TMUX_SESSION} tiled`); } catch { /* ignore */ }
 
-      // Send initial command if provided
-      if (command) {
-        tmux(`send-keys -t ${TMUX_SESSION}:0.${newPane.index} -- ${shellEscape(command)} Enter`);
+      // Send launch command
+      if (launchCmd) {
+        tmux(`send-keys -t ${TMUX_SESSION}:0.${newPane.index} -- ${shellEscape(launchCmd)} Enter`);
       }
     }
 
+    const modeLabel = mode === "background" ? " (background, no permissions)"
+      : mode === "resume" ? ` (resuming session '${name}')`
+      : "";
+
     return {
-      content: [{ type: "text", text: `Spawned terminal '${name}' (pane ${newPane?.index})${cwd ? ` in ${cwd}` : ""}${command ? `, running: ${command}` : ""}` }],
+      content: [{ type: "text", text: `Spawned terminal '${name}' (pane ${newPane?.index})${cwd ? ` in ${cwd}` : ""}${launchCmd ? `, running: ${launchCmd}` : ""}${modeLabel}` }],
     };
   }
 );
