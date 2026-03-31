@@ -36,7 +36,7 @@ npx @quantum-encoding-europe-limited/terminal-mcp
 | Tool | Description |
 |------|-------------|
 | `terminal_list` | List all active sessions (name, PID, cwd, command) |
-| `terminal_spawn` | Create a named session with optional cwd + startup command |
+| `terminal_spawn` | Create a named session with optional cwd, startup command, and mode |
 | `terminal_send` | Type text into a session (keystrokes via tmux send-keys) |
 | `terminal_read` | Read last N lines from a session (ANSI-stripped) |
 | `terminal_close` | Graceful close (Ctrl+C, Ctrl+D, then kill) |
@@ -44,6 +44,27 @@ npx @quantum-encoding-europe-limited/terminal-mcp
 | `terminal_resize` | Resize pane dimensions |
 | `terminal_snapshot` | Overview of ALL sessions — last 5 lines each |
 | `terminal_wait` | Poll until output matches a pattern (e.g. "Server ready") |
+
+## Spawn Modes
+
+`terminal_spawn` supports a `mode` parameter for controlling how Claude sessions run:
+
+| Mode | Behaviour |
+|------|-----------|
+| `interactive` | **(default)** Normal foreground session with permission prompts. Best when you need to approve tool calls. |
+| `background` | Auto-allows safe tools (Bash, Edit, Read, Write, Glob, Grep, Agent) but **blocks destructive ops** (git force push, git reset --hard, git branch -D, git clean -f, rm -rf). Best for autonomous work with guardrails. |
+| `resume` | Resume an existing Claude session by name, with the same background safety guardrails. |
+
+```
+terminal_spawn("scanner", cwd="/my/project", mode="background")
+// Launches: claude --allowedTools "Bash(*) Edit Read Write Glob Grep Agent"
+//                  --disallowedTools "Bash(git push --force*) Bash(git reset --hard*) ..."
+
+terminal_spawn("scanner", mode="resume")
+// Launches: claude --resume "scanner" --allowedTools ... --disallowedTools ...
+```
+
+**Note:** Background mode never uses `--dangerously-skip-permissions`. It uses curated allow/deny lists so agents can work autonomously without being able to force-push, delete branches, or wipe files.
 
 ## Examples
 
@@ -57,12 +78,16 @@ terminal_wait("server", pattern="ready on port 3000")
 ### Orchestrate multiple Claude sessions
 
 ```
-# Sessions already running in tmux panes:
-terminal_send("backend-claude", "add validation to the create endpoint")
-terminal_wait("backend-claude", pattern="? for shortcuts")  # wait for completion
-terminal_read("backend-claude", lines=30)  # read the response
+# Spawn specialists in background mode (no permission prompts)
+terminal_spawn("backend", cwd="/work/api", mode="background")
+terminal_spawn("frontend", cwd="/work/app", mode="background")
 
-terminal_send("frontend-claude", "update the form to match the new API")
+# Wait for Claude to start, then send tasks
+terminal_wait("backend", pattern="? for shortcuts")
+terminal_send("backend", "add input validation to the POST /users endpoint")
+
+terminal_wait("frontend", pattern="? for shortcuts")
+terminal_send("frontend", "update the user form to match the new API validation")
 ```
 
 ### Monitor everything at once
@@ -77,18 +102,20 @@ Environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TERMINAL_MCP_SESSION` | `mcp-terminals` | tmux session name |
+| `TERMINAL_MCP_SESSION` | auto-detected / `mcp-terminals` | tmux session name |
 | `TERMINAL_MCP_MAX_LINES` | `200` | Default line capture limit |
+
+If running inside tmux, the current session is auto-detected. Otherwise falls back to `TERMINAL_MCP_SESSION` or creates `mcp-terminals`.
 
 ## How it works
 
 All terminal management goes through tmux:
 - `terminal_spawn` → `tmux split-window` + `tmux select-pane -T`
-- `terminal_send` → `tmux send-keys`
+- `terminal_send` → `tmux send-keys` (short input) or `tmux load-buffer` + `paste-buffer` (long input, avoids escaping issues)
 - `terminal_read` → `tmux capture-pane -p`
 - `terminal_close` → `tmux kill-pane`
 
-Name matching is fuzzy — handles tmux title prefixes (like Claude's spinner characters) automatically.
+Name matching is fuzzy — handles tmux title prefixes (like Claude's spinner characters ✳ ✽ ⏺) automatically.
 
 ## License
 
